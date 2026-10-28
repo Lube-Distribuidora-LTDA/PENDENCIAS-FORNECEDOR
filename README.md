@@ -60,9 +60,13 @@ esta máquina acessa, sem o login do Painel Lube).
 
 ## Publicação
 
-Ainda não publicado (falta o OK do Júlio). O desenho é o dos outros painéis: repositório público
-`Lube-Distribuidora-LTDA/PENDENCIAS-FORNECEDOR` sem valores, projeto Vercel `pendencias-fornecedor`
-(Root `web`), guarda da Sentinela fechado (`middleware.ts`) registrado antes do 1º deploy, variáveis
-`SUPABASE_DB_*` (a senha quem cadastra é o Júlio) e cartão no portal.
+Publicado em 2026-10-28 (autorização do Júlio): repositório público
+`Lube-Distribuidora-LTDA/PENDENCIAS-FORNECEDOR`, **sem valores nem códigos de fornecedor** (nasceu de um commit
+só); projeto Vercel `pendencias-fornecedor` (Root `web`, `gru1`, Node 22; deploy a cada push na `main`);
+guarda da Sentinela fechado (`middleware.ts`), registrado no banco do portal **antes** do 1º deploy (migração
+`registrar_pendencias_fornecedor`: só entra quem tem acesso pelo Painel Lube; rede em observar); cartão no portal
+em COMPRAS; site no Guardião. Variáveis: `SUPABASE_DB_HOST`, `SUPABASE_DB_PORT` (5432), `SUPABASE_DB_NAME` e
+`SUPABASE_DB_USER` cadastradas; **`SUPABASE_DB_PASSWORD` (Sensitive) quem cadastra é o Júlio** — sem ela a API
+responde `configuracao_incompleta`.
 
 Registro no cérebro: `Projetos/PENDÊNCIAS FORNECEDOR.md`.
