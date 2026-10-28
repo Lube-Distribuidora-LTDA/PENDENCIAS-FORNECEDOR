@@ -41,9 +41,12 @@ SQL_WINTHOR = {
               WHERE m.data BETWEEN DATE '2011-01-01' AND TRUNC(SYSDATE)
               GROUP BY NVL(NULLIF(f.codfornecprinc, 0), m.codfornec)""",
     "sg": "SELECT codfornec, SUM(valor) FROM pcestcrfor GROUP BY codfornec",
-    "av": """SELECT p.codfornec, SUM(e.qtindeniz * e.valorultent)
+    # 8073 como o relatorio da rotina (conferido com o Julio em 2026-10-28, referencias.json): no fornecedor principal do
+    # cadastro, todas as filiais (regra do Julio para todos os relatorios)
+    "av": """SELECT NVL(NULLIF(f.codfornecprinc, 0), p.codfornec), SUM(e.qtindeniz * e.valorultent)
                FROM pcest e JOIN pcprodut p ON p.codprod = e.codprod
-              WHERE e.qtindeniz > 0 GROUP BY p.codfornec""",
+               LEFT JOIN pcfornec f ON f.codfornec = p.codfornec
+              WHERE e.qtindeniz > 0 GROUP BY NVL(NULLIF(f.codfornecprinc, 0), p.codfornec)""",
 }
 NOMES = {"sa": "1809 saldo a aplicar", "sf": "1825 saldo final", "sg": "1825 saldo guardado (PCESTCRFOR)", "av": "8073 valor avaria"}
 
@@ -62,6 +65,16 @@ def main():
     for k, sql in SQL_WINTHOR.items():
         oc.execute(sql)
         wt[k] = {int(c): Decimal(str(v or 0)) for c, v in oc.fetchall()}
+    # o relatorio da 8073 que o Julio mandou saiu so com uma filial: confere a mesma regra naquela filial
+    ref_arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "referencias.json")
+    refs = json.load(open(ref_arq, encoding="utf-8")) if os.path.exists(ref_arq) else {}
+    ref_8073 = []
+    for r in refs.get("8073", []):
+        oc.execute("""SELECT SUM(e.qtindeniz * e.valorultent) FROM pcest e JOIN pcprodut p ON p.codprod = e.codprod
+                       LEFT JOIN pcfornec f ON f.codfornec = p.codfornec
+                      WHERE e.qtindeniz > 0 AND e.codfilial = :fil AND NVL(NULLIF(f.codfornecprinc, 0), p.codfornec) = :cod""",
+                   fil=str(r["filial"]), cod=int(r["codfornec"]))
+        ref_8073.append((r, Decimal(str(oc.fetchone()[0] or 0))))
     ora.rollback()
     ora.close()
 
@@ -98,12 +111,14 @@ def main():
             print(f"   fornecedor {c}: WinThor {x:,.2f} | tela {y:,.2f} | diferenca {x - y:,.2f}")
         falhou = falhou or bool(dif)
     # o valor que a tela da rotina mostrou fica fora do Git (o repositorio e publico)
-    ref_arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "referencias.json")
-    if os.path.exists(ref_arq):
-        for r in json.load(open(ref_arq, encoding="utf-8")).get("1825", []):
-            c = int(r["codfornec"])
-            print(f"\nReferencia da tela da rotina 1825 ({r.get('quando', '')}): fornecedor {c} = R$ {Decimal(r['saldo_final']):,.2f} | "
-                  f"WinThor agora R$ {wt['sf'].get(c, 0):,.2f} | tela R$ {tela['sf'].get(c, 0):,.2f}")
+    for r in refs.get("1825", []):
+        c = int(r["codfornec"])
+        print(f"\nReferencia da tela da rotina 1825 ({r.get('quando', '')}): fornecedor {c} = R$ {Decimal(r['saldo_final']):,.2f} | "
+              f"WinThor agora R$ {wt['sf'].get(c, 0):,.2f} | tela R$ {tela['sf'].get(c, 0):,.2f}")
+    for r, v in ref_8073:
+        c = int(r["codfornec"])
+        print(f"Referencia do relatorio da rotina 8073 ({r.get('quando', '')}): fornecedor {c}, filial {r['filial']} = "
+              f"R$ {Decimal(r['valor']):,.2f} | WinThor agora, mesma filial, R$ {v:,.2f} | tela (todas as filiais) R$ {tela['av'].get(c, 0):,.2f}")
     print("\nRESULTADO:", "DIFERENCAS acima (rodar de novo: se sumirem, era o WinThor andando entre as leituras)" if falhou else "tudo igual ao centavo")
     return 1 if falhou else 0
 

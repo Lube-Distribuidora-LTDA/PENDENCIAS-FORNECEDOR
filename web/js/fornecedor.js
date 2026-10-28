@@ -139,6 +139,8 @@ function totais() {
     deb: deb, cre: cre, sf: deb - cre, nl: l.length, ng: (j.grupo || []).length,
     // fornecedor de OUTRO principal: o que ele lançou entra no saldo final do principal (como na 1825)
     prin: j.principal || null, sfp: soma(pp, function (x) { return x.ti === "D" ? x.vl : x.ti === "C" ? -x.vl : 0; }), np: pp.length,
+    // 8073 do mesmo jeito: a avaria soma no principal; avp/npp = a deste código quando o principal é outro
+    nga: (j.avaria_grupo || []).length, avp: soma(j.avaria_proprios || [], function (x) { return x.va; }), npp: (j.avaria_proprios || []).length,
     av: soma(a, function (x) { return x.va; }), npa: a.length, qta: soma(a, function (x) { return x.qt; }),
   };
 }
@@ -158,9 +160,13 @@ function desenharCorpo(manterRolagem) {
       : { id: "1825", cls: "r1825", ic: "carteira", rot: "Saldo final", val: t.sf,
           leg: t.nl ? "Débitos " + L.fBRL(t.deb) + " · créditos " + L.fBRL(t.cre) + (t.ng > 1 ? " · grupo de " + t.ng + " fornecedores" : "") : "Nenhum lançamento",
           abrir: "Ver a conta corrente", tit: "Débito e crédito de fornecedor", sub: L.fInt(t.nl) + (t.nl === 1 ? " lançamento" : " lançamentos") + " · todas as filiais · 01/01/2011 até hoje" + (t.ng > 1 ? " · grupo de " + t.ng + " fornecedores" : ""), corpo: corpo1825 },
-    { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: t.av,
-      leg: t.npa ? L.fInt(t.npa) + (t.npa === 1 ? " produto" : " produtos") + " · " + qtd(t.qta) + " un. avariadas" : "Nenhum produto avariado",
-      abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: L.fInt(t.npa) + (t.npa === 1 ? " produto avariado" : " produtos avariados") + " no estoque", corpo: corpo8073 },
+    t.prin && !t.npa && t.npp
+      ? { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: 0, texto: "No principal " + t.prin.c,
+          leg: "A avaria deste código (" + L.fBRL(t.avp) + ") entra no valor do principal " + t.prin.c + " (" + L.fBRL(t.prin.av || 0) + ")",
+          abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: "Entra na avaria do principal " + t.prin.c + " · " + L.fInt(t.npp) + (t.npp === 1 ? " produto deste código" : " produtos deste código"), vvTexto: "no " + t.prin.c, corpo: corpo8073 }
+      : { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: t.av,
+          leg: t.npa ? L.fInt(t.npa) + (t.npa === 1 ? " produto" : " produtos") + " · " + qtd(t.qta) + " un. avariadas" + (t.nga > 1 ? " · grupo de " + t.nga + " fornecedores" : "") : "Nenhum produto avariado",
+          abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: L.fInt(t.npa) + (t.npa === 1 ? " produto avariado" : " produtos avariados") + " · todas as filiais" + (t.nga > 1 ? " · grupo de " + t.nga + " fornecedores" : ""), corpo: corpo8073 },
   ];
   var cards = L.h("div", { class: "tres" }), secoes = L.h("div");
   defs.forEach(function (d) {
@@ -313,12 +319,31 @@ function corpo1825(box, t) {
 }
 
 /* ------------------------------ 8073: avaria ------------------------------ */
-function corpo8073(box) {
+/* Como a rotina 8073 (conferida com o Júlio em 2026-10-28): todas as filiais, somando no código a avaria dos produtos de
+   todo fornecedor que tem ele como principal no cadastro — o mesmo desenho da 1825. */
+function corpo8073(box, t) {
+  var j = D.j, grupo = j.avaria_grupo || [], membro = t.prin && !t.npa && t.npp;
+  var abrirCod = function (c) { return '<button type="button" class="link-forn" data-c="' + L.esc(c) + '">' + L.esc(c) + "</button>"; };
+  var nota = null;
+  if (membro) {
+    nota = L.h("div", { class: "rotina-nota info", html: L.ic("info") + "<span>Na rotina 8073 a avaria deste código entra no valor do fornecedor principal " +
+      abrirCod(t.prin.c) + (t.prin.n ? " · " + L.esc(t.prin.n) : "") + ": <b>" + L.esc(L.fBRL(t.prin.av || 0)) + "</b>. Aqui estão só os produtos deste código (" + L.esc(L.fBRL(t.avp)) + ").</span>" });
+  } else if (grupo.length > 1) {
+    nota = L.h("div", { class: "rotina-nota info", html: L.ic("camadas") + "<span>Avaria do grupo do fornecedor principal " + L.esc(D.cod) + ", como na rotina 8073 (todas as filiais):</span>" +
+      '<span class="filiais">' + grupo.map(function (g) { return abrirCod(g.fo) + " " + L.esc(g.fn || "") + ": <b>" + L.esc(L.fBRL(g.va)) + "</b>"; }).join(" · ") + "</span>" });
+  }
+  if (nota) {
+    nota.addEventListener("click", function (ev) { var b = ev.target.closest(".link-forn"); if (b && +b.dataset.c !== D.cod) L.abrirFornecedor(+b.dataset.c); });
+    box.appendChild(nota);
+  }
   box.appendChild(L.tabela({
     titulo: "Rotina 8073 — Avaria · " + nomeForn(), arquivo: "pendencias-8073", aba: "Avaria", porPagina: 25,
-    linhas: D.j.avaria || [], ordem: { id: "va", desc: true },
-    buscaTexto: function (r) { return r.cp + " " + (r.ds || ""); }, buscaDica: "Buscar produto por código ou nome…",
-    filtrosTexto: function () { return "Fornecedor " + nomeForn() + " · estoque avariado de todas as filiais"; },
+    linhas: membro ? (j.avaria_proprios || []) : (j.avaria || []), ordem: { id: "va", desc: true },
+    buscaTexto: function (r) { return r.cp + " " + (r.ds || "") + " " + (r.fo || ""); }, buscaDica: "Buscar produto por código ou nome…",
+    filtrosTexto: function () {
+      return "Fornecedor " + nomeForn() + " · estoque avariado de todas as filiais" +
+        (membro ? " · só os produtos deste código (o valor fica no principal " + t.prin.c + ")" : grupo.length > 1 ? " · grupo do principal (" + grupo.map(function (g) { return g.fo; }).join(", ") + ")" : "");
+    },
     totais: function (res) {
       var l = res.todas || res.linhas;
       return [{ rot: "Produtos", valor: L.fInt(l.length) }, { rot: "Quantidade", valor: qtd(soma(l, function (x) { return x.qt; })) },
@@ -327,6 +352,7 @@ function corpo8073(box) {
     colunas: [
       { id: "cp", titulo: "Código", valor: function (r) { return r.cp; }, fmt: function (v) { return { html: '<span class="cod">' + L.esc(v) + "</span>" }; }, alinhar: "esq", exportarTipo: "inteiro", somar: false, exp: function (r) { return r.cp; } },
       { id: "ds", titulo: "Produto", tipo: "texto", valor: function (r) { return r.ds; } },
+      { id: "fo", titulo: "Fornecedor", tipo: "texto", valor: function (r) { return r.fo; }, essencial: grupo.length > 1, dica: "Fornecedor do produto (o grupo soma no principal)" },
       { id: "fi", titulo: "Filial", tipo: "texto", valor: function (r) { return r.fi; } },
       { id: "em", titulo: "Embalagem", tipo: "texto", valor: function (r) { return r.em; } },
       { id: "qt", titulo: "Qt avariada", tipo: "num", valor: function (r) { return r.qt; }, fmt: qtd, exportarTipo: "moeda" },

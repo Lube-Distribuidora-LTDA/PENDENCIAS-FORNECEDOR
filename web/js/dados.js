@@ -143,6 +143,8 @@ function montar() {
       // 1825: o saldo final soma o grupo do principal (cadastro). pg = principal; sfp = o que este código lançou e
       // que entra no saldo do principal (só quando o principal é outro); ng = fornecedores somados neste código
       pg: r.pg ? r.pg[i] : r.c[i], sfp: r.sfp && r.sfp[i] != null ? +r.sfp[i] : 0, ng: r.ng ? r.ng[i] : 0,
+      // 8073: a avaria também soma no principal (desde 2026-10-28); avp = a avaria deste código que vai para o principal
+      avp: r.avp && r.avp[i] != null ? +r.avp[i] : 0, nga: r.nga ? r.nga[i] : 0,
     };
     f.membro = f.pg != null && f.pg !== f.c;
     f.t1809 = Math.abs(sa) >= 0.005; f.t1825 = Math.abs(sf) >= 0.005; f.t8073 = av >= 0.005;

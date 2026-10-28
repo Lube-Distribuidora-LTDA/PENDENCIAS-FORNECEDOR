@@ -6,7 +6,9 @@ Todos os fornecedores com o que cada um tem pendente com a Lube, em três númer
 |---|---|---|
 | **Saldo a aplicar** | **1809** — Relação de verbas por fornecedor | `PCVERBA.VALOR` − soma de `PCAPLICVERBA.VLAPLIC` (o estorno vem como linha negativa: a soma é o aplicado líquido), verbas não canceladas |
 | **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais, de 01/01/2011 até hoje**, somando no código os lançamentos de todo fornecedor que tem ele como **principal no cadastro** (`PCFORNEC.CODFORNECPRINC`) |
-| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, por filial e produto, pelo fornecedor do produto |
+| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais**, somando no código a avaria dos produtos de todo fornecedor que tem ele como **principal no cadastro** |
+
+**Regra do Júlio para todos os relatórios: sempre todas as filiais.**
 
 A lista mostra os 10,5 mil fornecedores do cadastro com os três números; o clique num fornecedor
 abre a tela dele com os três cartões e, **só quando a pessoa clica**, as linhas de cada rotina
@@ -50,8 +52,11 @@ dá o mesmo número (o valor de referência fica em `conferencia\referencias.jso
 principal mostra "no principal X" e, na tela dele, os próprios lançamentos com o saldo do principal. O saldo
 que o WinThor guarda (`PCESTCRFOR`) não é o da 1825 (difere em metade dos fornecedores) e fica só no banco.
 
-**A confirmar:** o SQL da 8073 não fica no banco (o usuário de leitura não enxerga): a regra usada é a de
-avaria da casa; e se a 1809 e a 8073 também somam o grupo do principal, como a 1825.
+**8073 conferida com o relatório da rotina (Júlio, 2026-10-28):** o relatório de um fornecedor de exemplo (3
+folhas, só a filial 1) bateu ao centavo com a avaria do grupo do principal naquela filial; o painel mostra a
+mesma regra em todas as filiais (o SQL da 8073 não fica no banco: a regra foi achada pelo número).
+
+**A confirmar:** se a 1809 também soma o grupo do principal.
 
 ## Na máquina
 

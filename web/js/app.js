@@ -156,7 +156,13 @@ function renderizar() {
           return { html: '<span class="zero" title="Os lançamentos deste código (' + L.esc(L.fBRL(r.sfp)) + ') entram no saldo final do principal ' + L.esc(r.pg) + ', como na rotina 1825">no principal ' + L.esc(r.pg) + "</span>" };
         return moedaCel(v);
       } },
-    { id: "av", titulo: "Valor avaria", tipo: "moeda", valor: function (r) { return r.av; }, fmt: moedaCel, exportarTipo: "moeda", barra: true, corBarra: "rgba(255,107,116,.16)", dica: "Rotina 8073: quantidade avariada × valor da última entrada" },
+    { id: "av", titulo: "Valor avaria", tipo: "moeda", valor: function (r) { return r.av; }, exportarTipo: "moeda", barra: true, corBarra: "rgba(255,107,116,.16)",
+      dica: "Rotina 8073: quantidade avariada × valor da última entrada, todas as filiais, somando os fornecedores que têm este código como principal",
+      fmt: function (v, r) {
+        if (r.membro && Math.abs(v) < 0.005 && r.avp >= 0.005)
+          return { html: '<span class="zero" title="A avaria deste código (' + L.esc(L.fBRL(r.avp)) + ') entra no valor do principal ' + L.esc(r.pg) + ', como na rotina 8073">no principal ' + L.esc(r.pg) + "</span>" };
+        return moedaCel(v);
+      } },
     { id: "fa", titulo: "Fantasia", tipo: "texto", valor: function (r) { return r.fa; }, essencial: false },
     { id: "cj", titulo: "CNPJ", tipo: "texto", valor: function (r) { return r.cj ? L.fCnpj(r.cj) : ""; }, essencial: false },
     { id: "ci", titulo: "Cidade / UF", tipo: "texto", valor: function (r) { return [r.ci, r.uf].filter(Boolean).join(" / "); }, essencial: false },
