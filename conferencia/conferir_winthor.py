@@ -3,8 +3,8 @@ SO LEITURA. Confere a tela contra o WinThor, fornecedor por fornecedor, no mesmo
 
   WinThor   soma as tres rotinas direto nas tabelas, com SQL proprio (agrupado no Oracle, diferente
             do SQL dos fluxos do agente, que le linha a linha):
-              1809  saldo a aplicar = PCVERBA.VALOR - soma(PCAPLICVERBA.VLAPLIC), verbas nao canceladas emitidas de
-                    01/01/2011 ate hoje (residuo abaixo de meio centavo = zero, como no painel)
+              1809  saldo a aplicar = PCVERBA.VALOR - soma(PCAPLICVERBA.VLAPLIC), verbas emitidas de 01/01/2011 ate
+                    hoje, CANCELADAS INCLUSIVE (a rotina soma), fracao abaixo de R$ 0,01 = zero (como a rotina)
               1825  saldo final     = soma(D) - soma(C) da PCMOVCRFOR, as filiais do cadastro (PCFILIAL), 01/01/2011
                     ate hoje, na conta do GRUPO do principal: o valor de X = tudo o que lancaram os fornecedores com o
                     mesmo principal de X no cadastro (PCFORNEC.CODFORNECPRINC); e o saldo guardado (PCESTCRFOR)
@@ -36,10 +36,10 @@ load_dotenv(ENV)
 # valor so do codigo (o fornecedor do lancamento ou do produto); o grupo do principal e montado aqui embaixo
 SQL_PROPRIO = {
     "sa": """SELECT v.codfornec,
-                    SUM(CASE WHEN ABS(v.valor - NVL(a.ap, 0)) < 0.005 THEN 0 ELSE v.valor - NVL(a.ap, 0) END)
+                    SUM(CASE WHEN ABS(v.valor - NVL(a.ap, 0)) < 0.01 THEN 0 ELSE v.valor - NVL(a.ap, 0) END)
                FROM pcverba v
                LEFT JOIN (SELECT numverba, SUM(vlaplic) ap FROM pcaplicverba GROUP BY numverba) a ON a.numverba = v.numverba
-              WHERE v.dtcancel IS NULL AND v.dtemissao BETWEEN DATE '2011-01-01' AND TRUNC(SYSDATE)
+              WHERE v.dtemissao BETWEEN DATE '2011-01-01' AND TRUNC(SYSDATE)
               GROUP BY v.codfornec""",
     "sfo": """SELECT m.codfornec, SUM(DECODE(m.tipo, 'D', m.valor, 'C', -m.valor, 0))
                 FROM pcmovcrfor m
@@ -151,7 +151,7 @@ def main():
         falhou = falhou or bool(dif)
 
     print()
-    for rotina, campo, chave in (("1825", "sf", "saldo_final"), ("8073", "av", "valor")):
+    for rotina, campo, chave in (("1809", "sa", "saldo_aplicar"), ("1825", "sf", "saldo_final"), ("8073", "av", "valor")):
         for x in refs.get(rotina, []):
             c, esperado = int(x["codfornec"]), Decimal(x[chave])
             dep = depois.get(c, Decimal(0)) if rotina == "1825" else Decimal(0)

@@ -223,13 +223,21 @@ function nomeForn() { var f = (D.j && D.j.fornecedor) || {}; return D.cod + " ·
 function corpo1809(box, t) {
   var todas = (D.j.verbas || []).slice();
   if (!todas.some(function (x) { return Math.abs(x.sa) >= 0.005; })) D.so1809 = false;
+  // a rotina soma a verba cancelada também (migração 10): a que foi cancelada com o valor zerado e uma aplicação negativa
+  // que ficou tem saldo; a nota diz qual é, para ninguém achar que é erro do painel
+  var canc = todas.filter(function (x) { return x.dc && Math.abs(x.sa) >= 0.005; });
+  var nota = canc.length ? L.h("div", { class: "rotina-nota atencao", html: L.ic("alerta") + "<span>Como na rotina 1809, " +
+    (canc.length === 1 ? "esta verba cancelada entra" : "estas verbas canceladas entram") + " no saldo a aplicar: " +
+    canc.map(function (x) { return "verba <b>" + L.esc(x.nv) + "</b>, cancelada em " + L.esc(L.fData(x.dc)) + " (valor " + L.esc(L.fBRL(x.vl)) +
+      ", aplicado " + L.esc(L.fBRL(x.ap)) + ", saldo <b>" + L.esc(L.fBRL(x.sa)) + "</b>)"; }).join("; ") +
+    ". O cancelamento zerou o valor, mas a aplicação ficou no WinThor.</span>" }) : null;
   function desenhar() {
     var linhas = D.so1809 ? todas.filter(function (x) { return Math.abs(x.sa) >= 0.005; }) : todas;
     var tab = L.tabela({
       titulo: "Rotina 1809 — Relação de verbas · " + nomeForn(), arquivo: "pendencias-1809", aba: "Verbas", porPagina: 25,
       linhas: linhas, ordem: { id: "em", desc: true },
       buscaTexto: function (r) { return r.nv + " " + (r.rf || "") + " " + (r.nn || "") + " " + (r.np || ""); }, buscaDica: "Buscar verba, referência, nota…",
-      filtrosTexto: function () { return "Fornecedor " + nomeForn() + " · todas as filiais · emissão de " + periodo() + " · " + (D.so1809 ? "só verbas com saldo a aplicar" : "todas as verbas não canceladas"); },
+      filtrosTexto: function () { return "Fornecedor " + nomeForn() + " · todas as filiais · emissão de " + periodo() + " · " + (D.so1809 ? "só verbas com saldo a aplicar" : "todas as verbas") + " · canceladas inclusive, como a rotina"; },
       extraTopo: function () {
         return L.h("div", { class: "seg" },
           L.h("button", { class: D.so1809 ? "on" : "", text: "Com saldo", title: "Verbas com saldo a aplicar (negativo = aplicado maior que a verba)", onclick: function () { D.so1809 = true; desenhar(); } }),
@@ -242,7 +250,8 @@ function corpo1809(box, t) {
                 { rot: "Saldo a aplicar", valor: L.fBRL(soma(l, function (x) { return x.sa; })), pri: true }];
       },
       colunas: [
-        { id: "nv", titulo: "Verba", valor: function (r) { return r.nv; }, fmt: function (v) { return { html: '<span class="cod">' + L.esc(v) + "</span>" }; }, alinhar: "esq", exportarTipo: "inteiro", somar: false, exp: function (r) { return r.nv; } },
+        { id: "nv", titulo: "Verba", valor: function (r) { return r.nv; }, fmt: function (v, r) { return { html: '<span class="cod">' + L.esc(v) + "</span>" + (r.dc ? " " + L.tag("Cancelada", "perigo") : "") }; }, alinhar: "esq", exportarTipo: "inteiro", somar: false, exp: function (r) { return r.nv; } },
+        { id: "dc", titulo: "Cancelada em", tipo: "data", valor: function (r) { return r.dc; }, essencial: linhas.some(function (x) { return x.dc; }), dica: "A rotina 1809 soma a verba cancelada também" },
         { id: "fi", titulo: "Filial", tipo: "texto", valor: function (r) { return r.fi; } },
         { id: "em", titulo: "Emissão", tipo: "data", valor: function (r) { return r.em; } },
         { id: "ve", titulo: "Vencimento", tipo: "data", valor: function (r) { return r.ve; } },
@@ -263,7 +272,9 @@ function corpo1809(box, t) {
       ],
       vazioTitulo: "Nenhuma verba", vazio: D.so1809 ? "Nenhuma verba com saldo a aplicar." : "Este fornecedor não tem verba no WinThor.",
     });
-    L.limpar(box).appendChild(tab);
+    L.limpar(box);
+    if (nota) box.appendChild(nota);
+    box.appendChild(tab);
   }
   desenhar();
 }
