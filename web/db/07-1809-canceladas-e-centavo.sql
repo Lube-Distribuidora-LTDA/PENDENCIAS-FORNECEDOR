@@ -2,7 +2,7 @@
 -- PENDÊNCIAS FORNECEDOR — migração pendencias_10_1809_canceladas_e_centavo (2026-10-29). Roda depois do
 -- 06-1825-grupo-do-principal.sql: troca o fluxo pendencias.verba, a saldo_aplicar() e a detalhe() de lá.
 --
--- O total da rotina 1809 de um fornecedor (print do Júlio) deu R$ 9.999,99 a mais que o painel:
+-- O total da rotina 1809 de um fornecedor (print do Júlio) deu mais que o painel:
 --   * a rotina soma também as verbas CANCELADAS. Quase todas têm saldo zero, mas duas (em toda a base) foram
 --     canceladas com o valor zerado e uma aplicação negativa (rotina 1807) que ficou: saldo = 0 − (−aplicação). O
 --     agente lia só as não canceladas (WHERE DTCANCEL IS NULL); agora lê todas, com a data do cancelamento;

@@ -78,7 +78,7 @@ da 8073 não fica no banco: a regra foi achada pelo número.
 **2026-10-29 09:48 (regra do grupo na 1825):** tudo igual ao centavo (828 códigos na 1825) e os cinco valores de
 referência IGUAIS (`referencias.json` aceita `lancado_depois`: transações que entraram depois do print).
 
-**1809 conferida com o total da rotina (Júlio, 2026-10-29):** o painel dava R$ 9.999,99 a menos. A rotina soma as
+**1809 conferida com o total da rotina (Júlio, 2026-10-29):** o painel dava menos que a rotina. A rotina soma as
 verbas **canceladas** também: quase todas têm saldo zero, mas duas na base inteira foram canceladas com o valor zerado e
 uma aplicação negativa (rotina 1807) que ficou, e somam o valor dela. O agente lia só as não canceladas; agora lê todas
 (`dtcancel` no fluxo `pendencias.verba`) e a tela marca a verba cancelada. O centavo: a rotina deixa fora a fração de
