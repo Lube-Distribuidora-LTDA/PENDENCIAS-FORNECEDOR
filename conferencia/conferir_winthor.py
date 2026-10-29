@@ -5,13 +5,14 @@ SO LEITURA. Confere a tela contra o WinThor, fornecedor por fornecedor, no mesmo
             do SQL dos fluxos do agente, que le linha a linha):
               1809  saldo a aplicar = PCVERBA.VALOR - soma(PCAPLICVERBA.VLAPLIC), verbas nao canceladas emitidas de
                     01/01/2011 ate hoje (residuo abaixo de meio centavo = zero, como no painel)
-              1825  saldo final     = soma(D) - soma(C) da PCMOVCRFOR, todas as filiais, 01/01/2011 ate hoje; e o
-                    saldo guardado (PCESTCRFOR)
+              1825  saldo final     = soma(D) - soma(C) da PCMOVCRFOR, as filiais do cadastro (PCFILIAL), 01/01/2011
+                    ate hoje, na conta do GRUPO do principal: o valor de X = tudo o que lancaram os fornecedores com o
+                    mesmo principal de X no cadastro (PCFORNEC.CODFORNECPRINC); e o saldo guardado (PCESTCRFOR)
               8073  valor avaria    = soma(PCEST.QTINDENIZ x VALORULTENT) pelo fornecedor do produto, todas as filiais
-                    menos as que a rotina nao soma (pendencias.filial_fora_8073: a 11)
-            Como as rotinas (conferido com o Julio em 2026-10-28 e 2026-10-29): o valor de um codigo X = o que X lancou
-            + o que lancaram os fornecedores que tem X como principal no cadastro (PCFORNEC.CODFORNECPRINC). Confere
-            tambem o valor so do codigo (sfo, avo), que e o que os totais do painel somam.
+                    menos as que a rotina nao soma (pendencias.filial_fora_8073: a 11); o valor de X = a avaria de X
+                    + a dos fornecedores que tem X como principal no cadastro
+            Como as rotinas (conferido com o Julio em 2026-10-28 e 2026-10-29). Confere tambem o valor so do codigo
+            (sfo, avo), a base dos totais do painel.
   Tela      o pacote que o painel baixa (pendencias.pacote 'lista'), o mesmo da tela.
 
 Diferenca pequena e explicavel: o agente le de 60 em 60 s; o que mudou no WinThor nesse meio tempo
@@ -43,6 +44,7 @@ SQL_PROPRIO = {
     "sfo": """SELECT m.codfornec, SUM(DECODE(m.tipo, 'D', m.valor, 'C', -m.valor, 0))
                 FROM pcmovcrfor m
                WHERE m.data BETWEEN DATE '2011-01-01' AND TRUNC(SYSDATE)
+                 AND EXISTS (SELECT 1 FROM pcfilial f WHERE f.codigo = m.codfilial)
                GROUP BY m.codfornec""",
     "sg": "SELECT codfornec, SUM(valor) FROM pcestcrfor GROUP BY codfornec",
     "avo": """SELECT p.codfornec, SUM(e.qtindeniz * e.valorultent)
@@ -50,7 +52,7 @@ SQL_PROPRIO = {
                WHERE e.qtindeniz > 0 AND p.codfornec IS NOT NULL {fora}
                GROUP BY p.codfornec""",
 }
-NOMES = {"sa": "1809 saldo a aplicar", "sf": "1825 saldo final (codigo + quem tem ele como principal)",
+NOMES = {"sa": "1809 saldo a aplicar", "sf": "1825 saldo final (conta do grupo do principal)",
          "sfo": "1825 so o codigo (o que os totais somam)", "sg": "1825 saldo guardado (PCESTCRFOR)",
          "av": "8073 valor avaria (codigo + quem tem ele como principal)", "avo": "8073 so o codigo (o que os totais somam)"}
 
@@ -64,6 +66,17 @@ def com_grupo(proprio, principal):
         if p and p != c:
             out[p] += v
     return dict(out)
+
+
+def conta_grupo(proprio, principal):
+    """1825: valor de X = a conta do grupo do principal de X (tudo o que lancaram os fornecedores com o mesmo principal)"""
+    tot = defaultdict(Decimal)
+    for c, v in proprio.items():
+        tot[principal.get(c, c)] += v
+    out = {c: tot[principal.get(c, c)] for c in set(principal) | set(proprio) if principal.get(c, c) in tot}
+    for p, v in tot.items():
+        out.setdefault(p, v)  # principal que nao esta no cadastro
+    return out
 
 
 def main():
@@ -92,9 +105,20 @@ def main():
         wt[k] = {int(c): Decimal(str(v or 0)) for c, v in oc.fetchall()}
     oc.execute("SELECT codfornec, NVL(NULLIF(codfornecprinc, 0), codfornec) FROM pcfornec")
     principal = {int(c): int(p) for c, p in oc.fetchall()}
+    # o valor que a tela da rotina mostrou fica fora do Git (o repositorio e publico); "lancado_depois" = transacoes
+    # que entraram no WinThor depois do print (a referencia e comparada sem elas)
+    ref_arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "referencias.json")
+    refs = json.load(open(ref_arq, encoding="utf-8")) if os.path.exists(ref_arq) else {}
+    depois = {}
+    for x in refs.get("1825", []):
+        nts = [int(n) for n in x.get("lancado_depois", [])]
+        if nts:
+            oc.execute("SELECT NVL(SUM(DECODE(tipo, 'D', valor, 'C', -valor, 0)), 0) FROM pcmovcrfor WHERE numtranscrfor IN ("
+                       + ", ".join(str(n) for n in nts) + ")")
+            depois[int(x["codfornec"])] = Decimal(str(oc.fetchone()[0]))
     ora.rollback()
     ora.close()
-    wt["sf"] = com_grupo(wt["sfo"], principal)
+    wt["sf"] = conta_grupo(wt["sfo"], principal)
     wt["av"] = com_grupo(wt["avo"], principal)
 
     with pg.cursor() as cur:
@@ -126,16 +150,16 @@ def main():
             print(f"   fornecedor {c}: WinThor {x:,.2f} | tela {y:,.2f} | diferenca {x - y:,.2f}")
         falhou = falhou or bool(dif)
 
-    # o valor que a tela da rotina mostrou fica fora do Git (o repositorio e publico)
-    ref_arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "referencias.json")
-    refs = json.load(open(ref_arq, encoding="utf-8")) if os.path.exists(ref_arq) else {}
     print()
     for rotina, campo, chave in (("1825", "sf", "saldo_final"), ("8073", "av", "valor")):
         for x in refs.get(rotina, []):
             c, esperado = int(x["codfornec"]), Decimal(x[chave])
-            ok = abs(tela[campo].get(c, Decimal(0)) - esperado) < Decimal("0.005")
+            dep = depois.get(c, Decimal(0)) if rotina == "1825" else Decimal(0)
+            ok = abs(tela[campo].get(c, Decimal(0)) - dep - esperado) < Decimal("0.005")
             print(f"Rotina {rotina} ({x.get('quando', '')}): fornecedor {c} = R$ {esperado:,.2f} | WinThor agora "
-                  f"R$ {wt[campo].get(c, 0):,.2f} | tela R$ {tela[campo].get(c, 0):,.2f} | {'IGUAL' if ok else 'DIFERENTE'}")
+                  f"R$ {wt[campo].get(c, 0):,.2f} | tela R$ {tela[campo].get(c, 0):,.2f}"
+                  + (f" (sem o lancado depois do print: R$ {tela[campo].get(c, 0) - dep:,.2f})" if dep else "")
+                  + f" | {'IGUAL' if ok else 'DIFERENTE'}")
     print("\nRESULTADO:", "DIFERENCAS acima (rodar de novo: se sumirem, era o WinThor andando entre as leituras)" if falhou else "tudo igual ao centavo")
     return 1 if falhou else 0
 

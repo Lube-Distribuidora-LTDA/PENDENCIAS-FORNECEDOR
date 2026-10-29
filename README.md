@@ -5,16 +5,17 @@ Todos os fornecedores com o que cada um tem pendente com a Lube, em três númer
 | Número | Rotina do WinThor | De onde vem |
 |---|---|---|
 | **Saldo a aplicar** | **1809** — Relação de verbas por fornecedor | `PCVERBA.VALOR` − soma de `PCAPLICVERBA.VLAPLIC` (o estorno vem como linha negativa: a soma é o aplicado líquido), verbas não canceladas emitidas **de 01/01/2011 até hoje**, só do código |
-| **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais, de 01/01/2011 até hoje**: os lançamentos do código + os de todo fornecedor que tem ele como **principal no cadastro** (`PCFORNEC.CODFORNECPRINC`) |
+| **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais do cadastro (`PCFILIAL`), de 01/01/2011 até hoje**, na **conta do grupo do principal**: todo fornecedor com o mesmo principal no cadastro (`PCFORNEC.CODFORNECPRINC`) lança na mesma conta, e todo código do grupo mostra o mesmo saldo |
 | **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais menos a 11** (como o relatório da rotina): a avaria dos produtos do código + a de todo fornecedor que tem ele como **principal no cadastro** |
 
 **Regra do Júlio para todos os relatórios: sempre todas as filiais.** O período começa sempre em
 **01/01/2011** e termina no dia de hoje (o dia de Brasília, que anda sozinho); a tela mostra o período na faixa
 de filtros e no cabeçalho do fornecedor.
 
-**O código mostra o valor dele:** um fornecedor que tem outro como principal mostra os próprios lançamentos e a
-própria avaria (como a rotina); o principal mostra os dele + os do grupo. Por isso a soma das linhas repetiria o
-grupo: os totais do painel somam cada lançamento e cada produto uma vez só (`sfo`, `avo`).
+**O número de cada código é o da rotina:** na 1825, todo código mostra a conta do grupo do principal dele (o
+principal e os membros, o mesmo saldo); na 8073, o código mostra a própria avaria + a dos fornecedores que têm ele
+como principal. Por isso a soma das linhas repetiria o grupo: o total da 1825 soma cada grupo uma vez e o da 8073
+soma cada produto uma vez (`avo`). A tela do fornecedor diz quanto é só do código.
 
 A lista mostra os 10,5 mil fornecedores do cadastro com os três números; o clique num fornecedor
 abre a tela dele com os três cartões e, **só quando a pessoa clica**, as linhas de cada rotina
@@ -23,7 +24,7 @@ abre a tela dele com os três cartões e, **só quando a pessoa clica**, as linh
 ## Ligado ao WinThor pelo AGENTE LUBE
 
 O painel nunca fala com o WinThor. Quem lê é o **AGENTE LUBE** (`Desktop\BI\22. AGENTE LUBE`), na
-`SRV-IA`, com 5 fluxos em `fluxos/pendencias.toml`:
+`SRV-IA`, com 6 fluxos em `fluxos/pendencias.toml`:
 
 | Fluxo | A cada | No WinThor (2026-10-28) |
 |---|---|---|
@@ -32,6 +33,7 @@ O painel nunca fala com o WinThor. Quem lê é o **AGENTE LUBE** (`Desktop\BI\22
 | `pendencias.saldo` (`PCESTCRFOR`) | 60 s | 940 linhas |
 | `pendencias.avaria` (8073) | 60 s | 3.670 produto × filial, ~0,1 s |
 | `pendencias.fornecedor` (`PCFORNEC`) | 10 min | 10.562 fornecedores |
+| `pendencias.filial` (`PCFILIAL`) | 10 min | 14 filiais (desde 2026-10-29: a 1825 soma só as filiais do cadastro) |
 
 - **A tela muda sozinha:** depois de gravar, o agente roda `pendencias.atualizar_pacote()`, que refaz o
   pacote da lista (só troca a versão se o conteúdo mudou). O navegador pergunta de 15 em 15 s.
@@ -42,8 +44,8 @@ O painel nunca fala com o WinThor. Quem lê é o **AGENTE LUBE** (`Desktop\BI\22
 
 ## Banco
 
-Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql` a `db/05-avaria-sem-filial-11.sql`; migrações
-`pendencias_01` a `pendencias_08`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
+Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql` a `db/06-1825-grupo-do-principal.sql`; migrações
+`pendencias_01` a `pendencias_09`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
 do servidor leem. `pendencias.detalhe(cod)` devolve um fornecedor; `pendencias.montar_lista()` o pacote.
 
 ## Conferência
@@ -59,6 +61,13 @@ dá o mesmo número (o valor de referência fica em `conferencia\referencias.jso
 escrevia "no principal X"; migração `pendencias_07_codigo_e_grupo`). O saldo que o WinThor guarda
 (`PCESTCRFOR`) não é o da 1825 (difere em metade dos fornecedores) e fica só no banco.
 
+**1825, a regra certa (Júlio, 2026-10-29):** um membro de um grupo grande (75 fornecedores com lançamento) dava
+negativo no painel e positivo na rotina. A rotina mostra a **conta do grupo inteiro do principal**, para o
+principal e para cada membro: a soma do grupo bateu ao centavo com o print, sem um lançamento feito minutos depois
+dele. Os dois conferidos antes continuam batendo (no principal o grupo é o mesmo; o outro era membro sozinho no
+grupo). E "todas as filiais" na rotina são as do cadastro: um lançamento numa filial que não existe na `PCFILIAL`
+fica fora (fluxo `pendencias.filial`, migração `pendencias_09_1825_grupo_do_principal`); a tela mostra à parte.
+
 **8073 conferida com o relatório da rotina (Júlio, 2026-10-28 e 2026-10-29):** dois relatórios puxados com
 todas as filiais batem ao centavo com a avaria do grupo **sem a filial 11** (BA, a única que usa estoque de
 depósito fechado). A lista das filiais que a rotina não soma mora no banco (`pendencias.filial_fora_8073`,
@@ -66,6 +75,8 @@ migração `pendencias_08_avaria_filiais_da_rotina`); a tela do fornecedor mostr
 da 8073 não fica no banco: a regra foi achada pelo número.
 
 **2026-10-29 08:26:** a conferência deu tudo igual ao centavo, inclusive os quatro valores de referência das rotinas.
+**2026-10-29 09:48 (regra do grupo na 1825):** tudo igual ao centavo (828 códigos na 1825) e os cinco valores de
+referência IGUAIS (`referencias.json` aceita `lancado_depois`: transações que entraram depois do print).
 
 **A confirmar:** se a 1809 também soma o grupo do principal.
 
