@@ -4,11 +4,17 @@ Todos os fornecedores com o que cada um tem pendente com a Lube, em três númer
 
 | Número | Rotina do WinThor | De onde vem |
 |---|---|---|
-| **Saldo a aplicar** | **1809** — Relação de verbas por fornecedor | `PCVERBA.VALOR` − soma de `PCAPLICVERBA.VLAPLIC` (o estorno vem como linha negativa: a soma é o aplicado líquido), verbas não canceladas |
-| **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais, de 01/01/2011 até hoje**, somando no código os lançamentos de todo fornecedor que tem ele como **principal no cadastro** (`PCFORNEC.CODFORNECPRINC`) |
-| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais**, somando no código a avaria dos produtos de todo fornecedor que tem ele como **principal no cadastro** |
+| **Saldo a aplicar** | **1809** — Relação de verbas por fornecedor | `PCVERBA.VALOR` − soma de `PCAPLICVERBA.VLAPLIC` (o estorno vem como linha negativa: a soma é o aplicado líquido), verbas não canceladas emitidas **de 01/01/2011 até hoje**, só do código |
+| **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais, de 01/01/2011 até hoje**: os lançamentos do código + os de todo fornecedor que tem ele como **principal no cadastro** (`PCFORNEC.CODFORNECPRINC`) |
+| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais menos a 11** (como o relatório da rotina): a avaria dos produtos do código + a de todo fornecedor que tem ele como **principal no cadastro** |
 
-**Regra do Júlio para todos os relatórios: sempre todas as filiais.**
+**Regra do Júlio para todos os relatórios: sempre todas as filiais.** O período começa sempre em
+**01/01/2011** e termina no dia de hoje (o dia de Brasília, que anda sozinho); a tela mostra o período na faixa
+de filtros e no cabeçalho do fornecedor.
+
+**O código mostra o valor dele:** um fornecedor que tem outro como principal mostra os próprios lançamentos e a
+própria avaria (como a rotina); o principal mostra os dele + os do grupo. Por isso a soma das linhas repetiria o
+grupo: os totais do painel somam cada lançamento e cada produto uma vez só (`sfo`, `avo`).
 
 A lista mostra os 10,5 mil fornecedores do cadastro com os três números; o clique num fornecedor
 abre a tela dele com os três cartões e, **só quando a pessoa clica**, as linhas de cada rotina
@@ -36,8 +42,8 @@ O painel nunca fala com o WinThor. Quem lê é o **AGENTE LUBE** (`Desktop\BI\22
 
 ## Banco
 
-Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql`; migrações `pendencias_01_schema` e
-`pendencias_02_saldo_sem_residuo`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
+Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql` a `db/05-avaria-sem-filial-11.sql`; migrações
+`pendencias_01` a `pendencias_08`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
 do servidor leem. `pendencias.detalhe(cod)` devolve um fornecedor; `pendencias.montar_lista()` o pacote.
 
 ## Conferência
@@ -48,13 +54,18 @@ e compara com a tela fornecedor por fornecedor. **2026-10-28 17:12: tudo igual a
 
 **1825 conferida com a tela da rotina (Júlio, 2026-10-28):** para o fornecedor de exemplo, o saldo final
 da rotina = os lançamentos dele + os de um segundo código que tem ele como fornecedor principal. O painel
-dá o mesmo número (o valor de referência fica em `conferencia\referencias.json`, fora do Git). Cada lançamento entra uma vez só, no principal do fornecedor dele; o fornecedor de outro
-principal mostra "no principal X" e, na tela dele, os próprios lançamentos com o saldo do principal. O saldo
-que o WinThor guarda (`PCESTCRFOR`) não é o da 1825 (difere em metade dos fornecedores) e fica só no banco.
+dá o mesmo número (o valor de referência fica em `conferencia\referencias.json`, fora do Git). Em
+2026-10-29 o Júlio conferiu um código que tem outro como principal: a rotina mostra os lançamentos dele (o painel
+escrevia "no principal X"; migração `pendencias_07_codigo_e_grupo`). O saldo que o WinThor guarda
+(`PCESTCRFOR`) não é o da 1825 (difere em metade dos fornecedores) e fica só no banco.
 
-**8073 conferida com o relatório da rotina (Júlio, 2026-10-28):** o relatório de um fornecedor de exemplo (3
-folhas, só a filial 1) bateu ao centavo com a avaria do grupo do principal naquela filial; o painel mostra a
-mesma regra em todas as filiais (o SQL da 8073 não fica no banco: a regra foi achada pelo número).
+**8073 conferida com o relatório da rotina (Júlio, 2026-10-28 e 2026-10-29):** dois relatórios puxados com
+todas as filiais batem ao centavo com a avaria do grupo **sem a filial 11** (BA, a única que usa estoque de
+depósito fechado). A lista das filiais que a rotina não soma mora no banco (`pendencias.filial_fora_8073`,
+migração `pendencias_08_avaria_filiais_da_rotina`); a tela do fornecedor mostra à parte o que ficou fora. O SQL
+da 8073 não fica no banco: a regra foi achada pelo número.
+
+**2026-10-29 08:26:** a conferência deu tudo igual ao centavo, inclusive os quatro valores de referência das rotinas.
 
 **A confirmar:** se a 1809 também soma o grupo do principal.
 

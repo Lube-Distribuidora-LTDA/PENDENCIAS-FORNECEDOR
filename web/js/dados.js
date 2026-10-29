@@ -140,11 +140,11 @@ function montar() {
       cc: r.cc[i], cp: r.cp[i] || "", pr: r.pr[i], rv: !!r.rv[i], at: !!r.at[i], bl: !!r.bl[i],
       sa: sa, nva: r.nva[i], nv: r.nv[i], sf: sf, sg: r.sg[i] == null ? null : +r.sg[i], nl: r.nl[i],
       av: av, npa: r.npa[i], qta: r.qta[i] == null ? 0 : +r.qta[i], um: r.um[i],
-      // 1825: o saldo final soma o grupo do principal (cadastro). pg = principal; sfp = o que este código lançou e
-      // que entra no saldo do principal (só quando o principal é outro); ng = fornecedores somados neste código
-      pg: r.pg ? r.pg[i] : r.c[i], sfp: r.sfp && r.sfp[i] != null ? +r.sfp[i] : 0, ng: r.ng ? r.ng[i] : 0,
-      // 8073: a avaria também soma no principal (desde 2026-10-28); avp = a avaria deste código que vai para o principal
-      avp: r.avp && r.avp[i] != null ? +r.avp[i] : 0, nga: r.nga ? r.nga[i] : 0,
+      // 1825 e 8073 como as rotinas (conferido com o Júlio): o código mostra o que ele lançou + o que lançaram os que têm
+      // ele como principal no cadastro. sfo/avo = só o do código (cada lançamento e produto uma vez): é o que os totais
+      // somam, porque o membro aparece no código dele e de novo no principal. pg = principal; ng/nga = fornecedores somados
+      pg: r.pg ? r.pg[i] : r.c[i], ng: r.ng ? r.ng[i] : 0, nga: r.nga ? r.nga[i] : 0,
+      sfo: r.sfo && r.sfo[i] != null ? +r.sfo[i] : 0, avo: r.avo && r.avo[i] != null ? +r.avo[i] : 0,
     };
     f.membro = f.pg != null && f.pg !== f.c;
     f.t1809 = Math.abs(sa) >= 0.005; f.t1825 = Math.abs(sf) >= 0.005; f.t8073 = av >= 0.005;

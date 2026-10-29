@@ -111,6 +111,7 @@ function desenharCabecalho() {
   item("pino", [f.cidade, f.uf].filter(Boolean).join(" / "));
   item("pessoas", f.comprador ? "Comprador: " + f.comprador : "");
   if (f.codfornecprinc && +f.codfornecprinc !== D.cod) item("camadas", "Principal: " + f.codfornecprinc + (f.fornecedor_principal ? " · " + f.fornecedor_principal : ""));
+  item("calendario", periodo() + " · todas as filiais", "periodo");
   if (f.dtexclusao) sub.appendChild(L.h("span", { html: L.tag("Excluído em " + L.fData(f.dtexclusao), "perigo") }));
   if (f.bloqueio === "S") sub.appendChild(L.h("span", { html: L.tag("Bloqueado", "atencao") }));
   if (f.revenda === "S") sub.appendChild(L.h("span", { html: L.tag("Revenda", "info") }));
@@ -131,17 +132,26 @@ function desenharCabecalho() {
 }
 
 /* ------------------------------ corpo: os três números e as três rotinas ------------------------------ */
+/* período das rotinas: começa sempre em 01/01/2011 e vai até hoje (o banco manda a data de hoje) */
+function periodo() {
+  var p = (D.j && (D.j.periodo_1825 || D.j.periodo)) || {};
+  return "01/01/2011 a " + (p.ate ? L.fData(p.ate) : L.META && L.META.hoje ? L.fData(L.META.hoje) : "hoje");
+}
+
+/* o valor do código soma algum outro fornecedor (que tem ele como principal)? */
+function outros(grupo) { return (grupo || []).some(function (g) { return +g.fo !== D.cod; }); }
+
 function totais() {
-  var j = D.j || {}, v = j.verbas || [], l = j.lancamentos || [], a = j.avaria || [], pp = j.proprios || [];
+  var j = D.j || {}, v = j.verbas || [], l = j.lancamentos || [], a = j.avaria || [];
   var deb = soma(l, function (x) { return x.ti === "D" ? x.vl : 0; }), cre = soma(l, function (x) { return x.ti === "C" ? x.vl : 0; });
   return {
     sa: soma(v, function (x) { return x.sa; }), nva: v.filter(function (x) { return Math.abs(x.sa) >= 0.005; }).length, nv: v.length,
-    deb: deb, cre: cre, sf: deb - cre, nl: l.length, ng: (j.grupo || []).length,
-    // fornecedor de OUTRO principal: o que ele lançou entra no saldo final do principal (como na 1825)
-    prin: j.principal || null, sfp: soma(pp, function (x) { return x.ti === "D" ? x.vl : x.ti === "C" ? -x.vl : 0; }), np: pp.length,
-    // 8073 do mesmo jeito: a avaria soma no principal; avp/npp = a deste código quando o principal é outro
-    nga: (j.avaria_grupo || []).length, avp: soma(j.avaria_proprios || [], function (x) { return x.va; }), npp: (j.avaria_proprios || []).length,
-    av: soma(a, function (x) { return x.va; }), npa: a.length, qta: soma(a, function (x) { return x.qt; }),
+    // 1825 e 8073 como as rotinas: o deste código + o dos que têm ele como principal (ng/nga = quantos fornecedores somam)
+    deb: deb, cre: cre, sf: deb - cre, nl: l.length, ng: outros(j.grupo) ? (j.grupo || []).length : 0,
+    av: soma(a, function (x) { return x.va; }), npa: a.length, qta: soma(a, function (x) { return x.qt; }), nga: outros(j.avaria_grupo) ? (j.avaria_grupo || []).length : 0,
+    filiais8073: (j.avaria_fora || []).length ? "todas as filiais menos a " + j.avaria_fora.map(function (x) { return x.fi; }).join(" e a ") : "todas as filiais",
+    // se o principal do cadastro é OUTRO código, este também entra no valor dele (só informação, abaixo das rotinas)
+    prin: j.principal || null,
   };
 }
 
@@ -153,25 +163,17 @@ function desenharCorpo(manterRolagem) {
     { id: "1809", cls: "r1809", ic: "dinheiro", rot: "Saldo a aplicar", val: t.sa,
       leg: t.nv ? L.fInt(t.nva) + " de " + L.fInt(t.nv) + (t.nv === 1 ? " verba" : " verbas") + " com saldo" : "Nenhuma verba",
       abrir: "Ver as verbas", tit: "Relação de verbas por fornecedor", sub: L.fInt(t.nv) + (t.nv === 1 ? " verba" : " verbas") + " · " + L.fInt(t.nva) + " com saldo a aplicar", corpo: corpo1809 },
-    t.prin && !t.nl
-      ? { id: "1825", cls: "r1825", ic: "carteira", rot: "Saldo final", val: 0, texto: "No principal " + t.prin.c,
-          leg: t.np ? "Os lançamentos deste código (" + L.fBRL(t.sfp) + ") entram no saldo final do principal " + t.prin.c + " (" + L.fBRL(t.prin.sf || 0) + ")" : "Nenhum lançamento",
-          abrir: "Ver a conta corrente", tit: "Débito e crédito de fornecedor", sub: "Entra no saldo do principal " + t.prin.c + " · " + L.fInt(t.np) + (t.np === 1 ? " lançamento" : " lançamentos") + " deste código", vvTexto: "no " + t.prin.c, corpo: corpo1825 }
-      : { id: "1825", cls: "r1825", ic: "carteira", rot: "Saldo final", val: t.sf,
-          leg: t.nl ? "Débitos " + L.fBRL(t.deb) + " · créditos " + L.fBRL(t.cre) + (t.ng > 1 ? " · grupo de " + t.ng + " fornecedores" : "") : "Nenhum lançamento",
-          abrir: "Ver a conta corrente", tit: "Débito e crédito de fornecedor", sub: L.fInt(t.nl) + (t.nl === 1 ? " lançamento" : " lançamentos") + " · todas as filiais · 01/01/2011 até hoje" + (t.ng > 1 ? " · grupo de " + t.ng + " fornecedores" : ""), corpo: corpo1825 },
-    t.prin && !t.npa && t.npp
-      ? { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: 0, texto: "No principal " + t.prin.c,
-          leg: "A avaria deste código (" + L.fBRL(t.avp) + ") entra no valor do principal " + t.prin.c + " (" + L.fBRL(t.prin.av || 0) + ")",
-          abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: "Entra na avaria do principal " + t.prin.c + " · " + L.fInt(t.npp) + (t.npp === 1 ? " produto deste código" : " produtos deste código"), vvTexto: "no " + t.prin.c, corpo: corpo8073 }
-      : { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: t.av,
-          leg: t.npa ? L.fInt(t.npa) + (t.npa === 1 ? " produto" : " produtos") + " · " + qtd(t.qta) + " un. avariadas" + (t.nga > 1 ? " · grupo de " + t.nga + " fornecedores" : "") : "Nenhum produto avariado",
-          abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: L.fInt(t.npa) + (t.npa === 1 ? " produto avariado" : " produtos avariados") + " · todas as filiais" + (t.nga > 1 ? " · grupo de " + t.nga + " fornecedores" : ""), corpo: corpo8073 },
+    { id: "1825", cls: "r1825", ic: "carteira", rot: "Saldo final", val: t.sf,
+      leg: t.nl ? "Débitos " + L.fBRL(t.deb) + " · créditos " + L.fBRL(t.cre) + (t.ng ? " · soma " + t.ng + (t.ng === 1 ? " fornecedor" : " fornecedores") : "") : "Nenhum lançamento",
+      abrir: "Ver a conta corrente", tit: "Débito e crédito de fornecedor", sub: L.fInt(t.nl) + (t.nl === 1 ? " lançamento" : " lançamentos") + " · todas as filiais · " + periodo() + (t.ng ? " · soma " + t.ng + (t.ng === 1 ? " fornecedor" : " fornecedores") : ""), corpo: corpo1825 },
+    { id: "8073", cls: "r8073", ic: "alerta", rot: "Valor avaria", val: t.av,
+      leg: t.npa ? L.fInt(t.npa) + (t.npa === 1 ? " produto" : " produtos") + " · " + qtd(t.qta) + " un. avariadas" + (t.nga ? " · soma " + t.nga + (t.nga === 1 ? " fornecedor" : " fornecedores") : "") : "Nenhum produto avariado",
+      abrir: "Ver os produtos", tit: "Avaria (AVARIA 2)", sub: L.fInt(t.npa) + (t.npa === 1 ? " produto avariado" : " produtos avariados") + " · " + t.filiais8073 + (t.nga ? " · soma " + t.nga + (t.nga === 1 ? " fornecedor" : " fornecedores") : ""), corpo: corpo8073 },
   ];
   var cards = L.h("div", { class: "tres" }), secoes = L.h("div");
   defs.forEach(function (d) {
     var zero = Math.abs(d.val) < 0.005;
-    var k = L.kpi({ icone: d.ic, rot: d.rot, valor: d.val, texto: d.texto, fmt: function (x) { return L.fBRL(x); }, classe: d.cls + (zero ? " zero" : "") + (D.abertas[d.id] ? " aberto ativo" : ""),
+    var k = L.kpi({ icone: d.ic, rot: d.rot, valor: d.val, fmt: function (x) { return L.fBRL(x); }, classe: d.cls + (zero ? " zero" : "") + (D.abertas[d.id] ? " aberto ativo" : ""),
       leg: [L.h("span", { text: d.leg }), L.h("span", { class: "abrir", html: L.esc(D.abertas[d.id] ? "Fechar" : d.abrir) + L.ic("dir") })],
       ajuda: "Rotina " + d.id + " do WinThor · clique para " + (D.abertas[d.id] ? "fechar" : "ver") + " as linhas",
       aoClicar: function () { alternar(d.id, true); } });
@@ -184,7 +186,7 @@ function desenharCorpo(manterRolagem) {
     var cab = L.h("button", { class: "rotina-cab", type: "button", onclick: function () { alternar(d.id); } },
       L.h("span", { class: "sig", text: d.id }),
       L.h("span", { class: "tt" }, L.h("b", { text: d.tit }), L.h("small", { text: d.sub })),
-      L.h("span", { class: "vv" + (d.val < -0.005 ? " neg" : ""), text: d.vvTexto || L.fBRL(d.val) }),
+      L.h("span", { class: "vv" + (d.val < -0.005 ? " neg" : ""), text: L.fBRL(d.val) }),
       L.h("span", { html: L.ic("dir", "seta") }));
     var corpoSec = L.h("div", { class: "rotina-corpo" });
     sec.appendChild(cab); sec.appendChild(corpoSec);
@@ -211,7 +213,7 @@ function alternar(id, rolar) {
   if (on && rolar && sec) setTimeout(function () { sec.scrollIntoView({ behavior: "smooth", block: "start" }); }, 30);
 }
 /* o que importa do detalhe (sem a hora de leitura): se não mudou, a tela não se refaz */
-function chave(j) { return j ? JSON.stringify([j.fornecedor, j.verbas, j.lancamentos, j.saldos, j.avaria]) : ""; }
+function chave(j) { return j ? JSON.stringify([j.fornecedor, j.verbas, j.lancamentos, j.saldos, j.avaria, j.avaria_fora]) : ""; }
 
 function nomeForn() { var f = (D.j && D.j.fornecedor) || {}; return D.cod + " · " + (f.fornecedor || (L.PORCOD.get(D.cod) || {}).n || ""); }
 
@@ -225,7 +227,7 @@ function corpo1809(box, t) {
       titulo: "Rotina 1809 — Relação de verbas · " + nomeForn(), arquivo: "pendencias-1809", aba: "Verbas", porPagina: 25,
       linhas: linhas, ordem: { id: "em", desc: true },
       buscaTexto: function (r) { return r.nv + " " + (r.rf || "") + " " + (r.nn || "") + " " + (r.np || ""); }, buscaDica: "Buscar verba, referência, nota…",
-      filtrosTexto: function () { return "Fornecedor " + nomeForn() + " · " + (D.so1809 ? "só verbas com saldo a aplicar" : "todas as verbas não canceladas"); },
+      filtrosTexto: function () { return "Fornecedor " + nomeForn() + " · todas as filiais · emissão de " + periodo() + " · " + (D.so1809 ? "só verbas com saldo a aplicar" : "todas as verbas não canceladas"); },
       extraTopo: function () {
         return L.h("div", { class: "seg" },
           L.h("button", { class: D.so1809 ? "on" : "", text: "Com saldo", title: "Verbas com saldo a aplicar (negativo = aplicado maior que a verba)", onclick: function () { D.so1809 = true; desenhar(); } }),
@@ -265,31 +267,34 @@ function corpo1809(box, t) {
 }
 
 /* ------------------------------ 1825: conta corrente ------------------------------ */
-function corpo1825(box, t) {
-  // Como a rotina 1825: todas as filiais, de 01/01/2011 até hoje, somando no código os lançamentos de todo fornecedor que
-  // tem ele como principal no cadastro (conferido com o Júlio em 2026-10-28 contra a tela da rotina).
-  var j = D.j, grupo = j.grupo || [], membro = t.prin && !t.nl;
+/* as notas de cima da rotina: quem soma neste código e, se o principal do cadastro é outro, em quem este código entra */
+function notasGrupo(box, grupo, rotina, oque, valorDe, valorPrin) {
   var abrirCod = function (c) { return '<button type="button" class="link-forn" data-c="' + L.esc(c) + '">' + L.esc(c) + "</button>"; };
-  var nota = null;
-  if (membro) {
-    nota = L.h("div", { class: "rotina-nota info", html: L.ic("info") + "<span>Na rotina 1825 os lançamentos deste código entram no saldo final do fornecedor principal " +
-      abrirCod(t.prin.c) + (t.prin.n ? " · " + L.esc(t.prin.n) : "") + ": <b>" + L.esc(L.fBRL(t.prin.sf || 0)) + "</b>. Aqui estão só os deste código (" + L.esc(L.fBRL(t.sfp)) + ").</span>" });
-  } else if (grupo.length > 1) {
-    nota = L.h("div", { class: "rotina-nota info", html: L.ic("camadas") + "<span>Saldo do grupo do fornecedor principal " + L.esc(D.cod) + ", como na rotina 1825:</span>" +
-      '<span class="filiais">' + grupo.map(function (g) { return abrirCod(g.fo) + " " + L.esc(g.fn || "") + ": <b>" + L.esc(L.fBRL(g.sd)) + "</b>"; }).join(" · ") + "</span>" });
-  }
-  if (nota) {
-    nota.addEventListener("click", function (ev) { var b = ev.target.closest(".link-forn"); if (b && +b.dataset.c !== D.cod) L.abrirFornecedor(+b.dataset.c); });
-    box.appendChild(nota);
-  }
-  var periodo = j.periodo_1825 ? L.fData(j.periodo_1825.desde) + " a " + L.fData(j.periodo_1825.ate) : "01/01/2011 até hoje";
+  var p = D.j.principal, notas = [];
+  if (grupo.some(function (g) { return +g.fo !== D.cod; }))
+    notas.push(L.h("div", { class: "rotina-nota info", html: L.ic("camadas") + "<span>Como na rotina " + rotina + ", " + oque + " deste código soma os fornecedores que têm ele como principal no cadastro:</span>" +
+      '<span class="filiais">' + grupo.map(function (g) { return abrirCod(g.fo) + " " + L.esc(g.fn || "") + ": <b>" + L.esc(L.fBRL(valorDe(g))) + "</b>"; }).join(" · ") + "</span>" }));
+  if (p)
+    notas.push(L.h("div", { class: "rotina-nota", html: L.ic("info") + "<span>O principal deste código no cadastro é o " + abrirCod(p.c) + (p.n ? " · " + L.esc(p.n) : "") +
+      ": na rotina " + rotina + " do " + L.esc(p.c) + " este código também entra (" + L.esc(L.fBRL(valorPrin(p) || 0)) + " lá).</span>" }));
+  notas.forEach(function (n) {
+    n.addEventListener("click", function (ev) { var b = ev.target.closest(".link-forn"); if (b && +b.dataset.c !== D.cod) L.abrirFornecedor(+b.dataset.c); });
+    box.appendChild(n);
+  });
+}
+
+function corpo1825(box, t) {
+  // Como a rotina 1825 (conferida com o Júlio em 2026-10-28 e 2026-10-29): todas as filiais, de 01/01/2011 até hoje; o
+  // código mostra os lançamentos dele + os de todo fornecedor que tem ele como principal no cadastro.
+  var j = D.j, grupo = j.grupo || [];
+  notasGrupo(box, grupo, "1825", "o saldo final", function (g) { return g.sd; }, function (p) { return p.sf; });
   box.appendChild(L.tabela({
     titulo: "Rotina 1825 — Débito e crédito de fornecedor · " + nomeForn(), arquivo: "pendencias-1825", aba: "Conta corrente", porPagina: 25,
-    linhas: membro ? (j.proprios || []) : (j.lancamentos || []), ordem: { id: "nt", desc: true },
+    linhas: j.lancamentos || [], ordem: { id: "nt", desc: true },
     buscaTexto: function (r) { return r.nt + " " + r.fo + " " + (r.hi || "") + " " + (r.nv || "") + " " + (r.np || "") + " " + (r.fu || ""); }, buscaDica: "Buscar histórico, verba, pedido…",
     filtrosTexto: function () {
-      return "Fornecedor " + nomeForn() + " · todas as filiais · " + periodo +
-        (membro ? " · só os lançamentos deste código (o saldo final fica no principal " + t.prin.c + ")" : grupo.length > 1 ? " · grupo do principal (" + grupo.map(function (g) { return g.fo; }).join(", ") + ")" : "") +
+      return "Fornecedor " + nomeForn() + " · todas as filiais · " + periodo() +
+        (grupo.length > 1 ? " · com os fornecedores que têm ele como principal (" + grupo.map(function (g) { return g.fo; }).join(", ") + ")" : "") +
         " · saldo corrido na ordem da transação";
     },
     totais: function (res) {
@@ -299,7 +304,7 @@ function corpo1825(box, t) {
     colunas: [
       { id: "nt", titulo: "Transação", valor: function (r) { return r.nt; }, fmt: function (v) { return { html: '<span class="cod">' + L.esc(v) + "</span>" }; }, alinhar: "esq", exportarTipo: "inteiro", somar: false, exp: function (r) { return r.nt; } },
       { id: "dt", titulo: "Data", tipo: "data", valor: function (r) { return r.dt; }, ordVal: function (r) { return (r.dt || "") + String(r.hr == null ? 0 : r.hr).padStart(2, "0") + String(r.mi == null ? 0 : r.mi).padStart(2, "0"); } },
-      { id: "fo", titulo: "Fornecedor", tipo: "texto", valor: function (r) { return r.fo; }, essencial: grupo.length > 1, dica: "Código do fornecedor que lançou (o grupo soma no principal)" },
+      { id: "fo", titulo: "Fornecedor", tipo: "texto", valor: function (r) { return r.fo; }, essencial: outros(grupo), dica: "Código do fornecedor que lançou (o grupo soma no principal)" },
       { id: "fi", titulo: "Filial", tipo: "texto", valor: function (r) { return r.fi; } },
       { id: "ti", titulo: "Tipo", tipo: "tag", valor: function (r) { return r.ti; }, fmt: function (v) { return { html: '<span class="tag-tipo ' + L.esc(v) + '">' + (v === "D" ? "Débito" : v === "C" ? "Crédito" : L.esc(v || "")) + "</span>" }; }, exp: function (r) { return r.ti === "D" ? "Débito" : r.ti === "C" ? "Crédito" : r.ti; } },
       { id: "db", titulo: "Débito", tipo: "moeda", valor: function (r) { return r.ti === "D" ? r.vl : null; }, fmt: moedaCel, exportarTipo: "moeda" },
@@ -319,30 +324,23 @@ function corpo1825(box, t) {
 }
 
 /* ------------------------------ 8073: avaria ------------------------------ */
-/* Como a rotina 8073 (conferida com o Júlio em 2026-10-28): todas as filiais, somando no código a avaria dos produtos de
-   todo fornecedor que tem ele como principal no cadastro — o mesmo desenho da 1825. */
+/* Como a rotina 8073 (conferida com o Júlio em 2026-10-28): o código mostra a avaria dos produtos dele + a dos fornecedores
+   que têm ele como principal no cadastro — o mesmo desenho da 1825. */
 function corpo8073(box, t) {
-  var j = D.j, grupo = j.avaria_grupo || [], membro = t.prin && !t.npa && t.npp;
-  var abrirCod = function (c) { return '<button type="button" class="link-forn" data-c="' + L.esc(c) + '">' + L.esc(c) + "</button>"; };
-  var nota = null;
-  if (membro) {
-    nota = L.h("div", { class: "rotina-nota info", html: L.ic("info") + "<span>Na rotina 8073 a avaria deste código entra no valor do fornecedor principal " +
-      abrirCod(t.prin.c) + (t.prin.n ? " · " + L.esc(t.prin.n) : "") + ": <b>" + L.esc(L.fBRL(t.prin.av || 0)) + "</b>. Aqui estão só os produtos deste código (" + L.esc(L.fBRL(t.avp)) + ").</span>" });
-  } else if (grupo.length > 1) {
-    nota = L.h("div", { class: "rotina-nota info", html: L.ic("camadas") + "<span>Avaria do grupo do fornecedor principal " + L.esc(D.cod) + ", como na rotina 8073 (todas as filiais):</span>" +
-      '<span class="filiais">' + grupo.map(function (g) { return abrirCod(g.fo) + " " + L.esc(g.fn || "") + ": <b>" + L.esc(L.fBRL(g.va)) + "</b>"; }).join(" · ") + "</span>" });
-  }
-  if (nota) {
-    nota.addEventListener("click", function (ev) { var b = ev.target.closest(".link-forn"); if (b && +b.dataset.c !== D.cod) L.abrirFornecedor(+b.dataset.c); });
-    box.appendChild(nota);
-  }
+  var j = D.j, grupo = j.avaria_grupo || [], fora = j.avaria_fora || [];
+  notasGrupo(box, grupo, "8073", "a avaria", function (g) { return g.va; }, function (p) { return p.av; });
+  // a 8073 com todas as filiais não soma a filial 11 (depósito fechado; pendencias.filial_fora_8073): mostra o que ficou fora
+  if (fora.length)
+    box.appendChild(L.h("div", { class: "rotina-nota", html: L.ic("info") + "<span>Como na rotina 8073, " +
+      fora.map(function (x) { return "a filial " + L.esc(x.fi) + " fica fora do valor (" + L.fInt(x.np) + (x.np === 1 ? " produto, " : " produtos, ") + "<b>" + L.esc(L.fBRL(x.va)) + "</b>)"; }).join("; ") +
+      ": mesmo com todas as filiais, o relatório da rotina não traz essas linhas.</span>" }));
   box.appendChild(L.tabela({
     titulo: "Rotina 8073 — Avaria · " + nomeForn(), arquivo: "pendencias-8073", aba: "Avaria", porPagina: 25,
-    linhas: membro ? (j.avaria_proprios || []) : (j.avaria || []), ordem: { id: "va", desc: true },
+    linhas: j.avaria || [], ordem: { id: "va", desc: true },
     buscaTexto: function (r) { return r.cp + " " + (r.ds || "") + " " + (r.fo || ""); }, buscaDica: "Buscar produto por código ou nome…",
     filtrosTexto: function () {
-      return "Fornecedor " + nomeForn() + " · estoque avariado de todas as filiais" +
-        (membro ? " · só os produtos deste código (o valor fica no principal " + t.prin.c + ")" : grupo.length > 1 ? " · grupo do principal (" + grupo.map(function (g) { return g.fo; }).join(", ") + ")" : "");
+      return "Fornecedor " + nomeForn() + " · estoque avariado de todas as filiais" + (fora.length ? " menos a " + fora.map(function (x) { return x.fi; }).join(" e a ") + " (como a rotina 8073)" : "") +
+        (grupo.length > 1 ? " · com os fornecedores que têm ele como principal (" + grupo.map(function (g) { return g.fo; }).join(", ") + ")" : "");
     },
     totais: function (res) {
       var l = res.todas || res.linhas;
@@ -352,7 +350,7 @@ function corpo8073(box, t) {
     colunas: [
       { id: "cp", titulo: "Código", valor: function (r) { return r.cp; }, fmt: function (v) { return { html: '<span class="cod">' + L.esc(v) + "</span>" }; }, alinhar: "esq", exportarTipo: "inteiro", somar: false, exp: function (r) { return r.cp; } },
       { id: "ds", titulo: "Produto", tipo: "texto", valor: function (r) { return r.ds; } },
-      { id: "fo", titulo: "Fornecedor", tipo: "texto", valor: function (r) { return r.fo; }, essencial: grupo.length > 1, dica: "Fornecedor do produto (o grupo soma no principal)" },
+      { id: "fo", titulo: "Fornecedor", tipo: "texto", valor: function (r) { return r.fo; }, essencial: outros(grupo), dica: "Fornecedor do produto (o grupo soma no principal)" },
       { id: "fi", titulo: "Filial", tipo: "texto", valor: function (r) { return r.fi; } },
       { id: "em", titulo: "Embalagem", tipo: "texto", valor: function (r) { return r.em; } },
       { id: "qt", titulo: "Qt avariada", tipo: "num", valor: function (r) { return r.qt; }, fmt: qtd, exportarTipo: "moeda" },

@@ -30,6 +30,7 @@ L.textoFiltros = function () {
   p.push(F.sit === "pend" ? "Só fornecedores com pendência" : F.sit === "sem" ? "Só fornecedores sem pendência" : "Todos os fornecedores");
   if (F.rot.length) p.push("Rotina: " + F.rot.map(function (r) { return r + " " + ROTINAS.filter(function (x) { return x.id === r; })[0].rot; }).join(", "));
   if (F.comp.length) p.push("Comprador: " + F.comp.map(nomeComprador).join(", "));
+  p.push("Período " + periodoLista() + " · todas as filiais");
   return p.join(" · ");
 };
 function mudou() { construirFiltros(); renderizar(); }
@@ -64,6 +65,9 @@ function construirFiltros() {
   if (F.sit !== "todos" || F.rot.length || F.comp.length) {
     fx.appendChild(L.h("button", { class: "fx-limpar", type: "button", text: "Limpar filtros", onclick: function () { F.sit = "todos"; F.rot = []; F.comp = []; mudou(); } }));
   }
+  // fixo, como o Júlio pediu: começa sempre em 01/01/2011, termina no dia de hoje, todas as filiais
+  fx.appendChild(L.h("span", { class: "fx-periodo", title: "Período fixo das rotinas: começa sempre em 01/01/2011 e vai até hoje, com todas as filiais",
+    html: L.ic("calendario") + "<b>" + L.esc(periodoLista()) + "</b> · todas as filiais" }));
 }
 
 var popAberto = null;
@@ -103,6 +107,22 @@ function moedaCel(v) {
   if (v == null || Math.abs(v) < 0.005) return { html: '<span class="zero">—</span>' };
   return { html: '<span class="' + (v < 0 ? "neg" : "") + '">' + L.esc(L.fBRL(v)) + "</span>" };
 }
+/* valor de código que soma outros fornecedores (o grupo do principal): sublinhado pontilhado e a dica dizem quanto é só dele */
+function grupoCel(v, proprio, oque) {
+  var c = moedaCel(v);
+  if (v != null && Math.abs(v - (proprio || 0)) >= 0.005)
+    c.html = '<span class="com-grupo" title="Como na rotina: soma os ' + oque + ' deste código (' + L.esc(L.fBRL(proprio || 0)) + ') e os dos fornecedores que têm ele como principal">' + c.html + "</span>";
+  return c;
+}
+/* soma da 1825 (sfo) ou da 8073 (avo) sem contar duas vezes: cada código entra com o que é só dele, mais os fornecedores
+   que somam num principal da lista sem estarem nela. Com um principal só, dá o mesmo valor da linha dele. */
+function periodoLista() { var h = (L.META || {}).hoje; return "01/01/2011 a " + (h ? L.fData(h) : "hoje"); }
+function somaUnica(lin, k) {
+  var em = new Set(), s = 0;
+  lin.forEach(function (f) { em.add(f.c); s += f[k]; });
+  L.F.forEach(function (m) { if (m.membro && em.has(m.pg) && !em.has(m.c)) s += m[k]; });
+  return s;
+}
 function renderizar() {
   if (!L.F.length) return;
   var cont = L.$("conteudo"), lin = filtrados();
@@ -110,15 +130,17 @@ function renderizar() {
   var raiz = L.h("div", { class: "pagina" });
 
   // os números das três rotinas (com os filtros)
-  var t = { sa: 0, sf: 0, av: 0, nva: 0, npa: 0, f1809: 0, f1825: 0, f8073: 0, pend: 0 };
+  var t = { sa: 0, nva: 0, npa: 0, f1809: 0, f1825: 0, f8073: 0, pend: 0 };
   lin.forEach(function (f) {
-    t.sa += f.sa; t.sf += f.sf; t.av += f.av; t.nva += f.nva; t.npa += f.npa;
+    t.sa += f.sa; t.nva += f.nva; t.npa += f.npa;
     if (f.t1809) t.f1809++; if (f.t1825) t.f1825++; if (f.t8073) t.f8073++; if (f.pend) t.pend++;
   });
+  t.sf = somaUnica(lin, "sfo"); t.av = somaUnica(lin, "avo");
   var legs = {
     "1809": L.fInt(t.f1809) + " fornecedores · " + L.fInt(t.nva) + " verbas com saldo",
-    "1825": L.fInt(t.f1825) + " fornecedores principais com saldo · todas as filiais, desde 01/01/2011",
-    "8073": L.fInt(t.f8073) + " fornecedores · " + L.fInt(t.npa) + " produtos avariados",
+    "1825": L.fInt(t.f1825) + " fornecedores com saldo · todas as filiais · " + periodoLista(),
+    // a filial 11 fica fora como na rotina (pendencias.filial_fora_8073, migração 08): mudou lá, mudar aqui e na dica da coluna
+    "8073": L.fInt(t.f8073) + " fornecedores · " + L.fInt(t.npa) + " produtos avariados · como a rotina, sem a filial 11",
   };
   var kpis = L.kpis();
   ROTINAS.forEach(function (r) {
@@ -150,19 +172,11 @@ function renderizar() {
       exp: function (r) { return ROTINAS.filter(function (x) { return r["t" + x.id]; }).map(function (x) { return x.id; }).join(", "); }, exportarTipo: "texto" },
     { id: "sa", titulo: "Saldo a aplicar", tipo: "moeda", valor: function (r) { return r.sa; }, fmt: moedaCel, exportarTipo: "moeda", barra: true, dica: "Rotina 1809: valor das verbas menos o aplicado" },
     { id: "sf", titulo: "Saldo final", tipo: "moeda", valor: function (r) { return r.sf; }, exportarTipo: "moeda", barra: true, corBarra: "rgba(167,139,250,.16)",
-      dica: "Rotina 1825: débitos − créditos da conta corrente, todas as filiais, de 01/01/2011 até hoje, somando os fornecedores que têm este código como principal",
-      fmt: function (v, r) {
-        if (r.membro && Math.abs(v) < 0.005 && Math.abs(r.sfp) >= 0.005)
-          return { html: '<span class="zero" title="Os lançamentos deste código (' + L.esc(L.fBRL(r.sfp)) + ') entram no saldo final do principal ' + L.esc(r.pg) + ', como na rotina 1825">no principal ' + L.esc(r.pg) + "</span>" };
-        return moedaCel(v);
-      } },
+      dica: "Rotina 1825: débitos − créditos da conta corrente, todas as filiais, de 01/01/2011 até hoje: o deste código + o dos fornecedores que têm ele como principal",
+      fmt: function (v, r) { return grupoCel(v, r.sfo, "lançamentos"); } },
     { id: "av", titulo: "Valor avaria", tipo: "moeda", valor: function (r) { return r.av; }, exportarTipo: "moeda", barra: true, corBarra: "rgba(255,107,116,.16)",
-      dica: "Rotina 8073: quantidade avariada × valor da última entrada, todas as filiais, somando os fornecedores que têm este código como principal",
-      fmt: function (v, r) {
-        if (r.membro && Math.abs(v) < 0.005 && r.avp >= 0.005)
-          return { html: '<span class="zero" title="A avaria deste código (' + L.esc(L.fBRL(r.avp)) + ') entra no valor do principal ' + L.esc(r.pg) + ', como na rotina 8073">no principal ' + L.esc(r.pg) + "</span>" };
-        return moedaCel(v);
-      } },
+      dica: "Rotina 8073: quantidade avariada × valor da última entrada: a deste código + a dos fornecedores que têm ele como principal; todas as filiais menos a 11, como o relatório da rotina",
+      fmt: function (v, r) { return grupoCel(v, r.avo, "produtos"); } },
     { id: "fa", titulo: "Fantasia", tipo: "texto", valor: function (r) { return r.fa; }, essencial: false },
     { id: "cj", titulo: "CNPJ", tipo: "texto", valor: function (r) { return r.cj ? L.fCnpj(r.cj) : ""; }, essencial: false },
     { id: "ci", titulo: "Cidade / UF", tipo: "texto", valor: function (r) { return [r.ci, r.uf].filter(Boolean).join(" / "); }, essencial: false },
@@ -180,7 +194,7 @@ function renderizar() {
     totais: function (res) {
       var l = res.todas || res.linhas, s = function (k) { var x = 0; l.forEach(function (f) { x += f[k]; }); return x; };
       return [{ rot: "Fornecedores", valor: L.fInt(l.length) }, { rot: "Saldo a aplicar", valor: L.fBRL(s("sa")) },
-              { rot: "Saldo final", valor: L.fBRL(s("sf")) }, { rot: "Valor avaria", valor: L.fBRL(s("av")) }];
+              { rot: "Saldo final", valor: L.fBRL(somaUnica(l, "sfo")) }, { rot: "Valor avaria", valor: L.fBRL(somaUnica(l, "avo")) }];
     },
     colunas: cols,
     aoClicar: function (r) { L.abrirFornecedor(r.c); },
