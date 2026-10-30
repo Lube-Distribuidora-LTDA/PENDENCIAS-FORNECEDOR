@@ -6,7 +6,7 @@ Todos os fornecedores com o que cada um tem pendente com a Lube, em três númer
 |---|---|---|
 | **Saldo a aplicar** | **1809** — Relação de verbas por fornecedor | `PCVERBA.VALOR` − soma de `PCAPLICVERBA.VLAPLIC` (o estorno vem como linha negativa: a soma é o aplicado líquido), verbas emitidas **de 01/01/2011 até hoje**, **canceladas inclusive** (a rotina soma: a cancelada com o valor zerado e uma aplicação negativa tem saldo), fração de verba abaixo de **R$ 0,01** = zero, só do código |
 | **Saldo final** | **1825** — Débito e crédito de fornecedor | conta corrente `PCMOVCRFOR`: débitos (D) − créditos (C), estornos inclusos, **todas as filiais do cadastro (`PCFILIAL`), de 01/01/2011 até hoje**, na **conta do grupo do principal**: todo fornecedor com o mesmo principal no cadastro (`PCFORNEC.CODFORNECPRINC`) lança na mesma conta, e todo código do grupo mostra o mesmo saldo |
-| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais menos a 11** (como o relatório da rotina): a avaria dos produtos do código + a de todo fornecedor que tem ele como **principal no cadastro** |
+| **Valor avaria** | **8073** — AVARIA 2 (personalizada, `PCSIS800`) | `PCEST.QTINDENIZ` × `VALORULTENT`, **todas as filiais menos a 7 e a 11** (como o relatório da rotina, que com todas as filiais só traz as linhas da filial 1 nos relatórios conferidos; a 12 ainda sem relatório): a avaria dos produtos do código + a de todo fornecedor que tem ele como **principal no cadastro** |
 
 **Regra do Júlio para todos os relatórios: sempre todas as filiais.** O período começa sempre em
 **01/01/2011** e termina no dia de hoje (o dia de Brasília, que anda sozinho); a tela mostra o período na faixa
@@ -44,8 +44,8 @@ O painel nunca fala com o WinThor. Quem lê é o **AGENTE LUBE** (`Desktop\BI\22
 
 ## Banco
 
-Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql` a `db/07-1809-canceladas-e-centavo.sql`; migrações
-`pendencias_01` a `pendencias_10`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
+Schema `pendencias` no DATA WAREHOUSE (`db/01-schema.sql` a `db/08-avaria-sem-filial-7.sql`; migrações
+`pendencias_01` a `pendencias_11`). Tabelas com RLS ligado e sem políticas; só o agente e as funções
 do servidor leem. `pendencias.detalhe(cod)` devolve um fornecedor; `pendencias.montar_lista()` o pacote.
 
 ## Conferência
@@ -85,7 +85,15 @@ uma aplicação negativa (rotina 1807) que ficou, e somam o valor dela. O agente
 verba abaixo de R$ 0,01 (com o corte de meio centavo sobrava R$ 0,01). Migração `pendencias_10_1809_canceladas_e_centavo`.
 **11:19:** tudo igual ao centavo nas três rotinas e os seis valores de referência IGUAIS.
 
-**A confirmar:** se a 1809 também soma o grupo do principal.
+**8073 sem a filial 7 (Júlio, 2026-10-30):** o "Total Valor" da última folha da 8073 de um principal com grupo grande,
+puxada com todas as filiais, é a avaria do grupo **só na filial 1**: o painel tinha a mais um produto da filial 7. A 7
+entrou em `pendencias.filial_fora_8073` (migração `pendencias_11_avaria_sem_filial_7`) e o pacote leva a lista
+(`meta.fora_8073`), que a tela usa nos textos. Nos três relatórios conferidos o total é sempre o da filial 1. **09:20:**
+tudo igual ao centavo; a conferência agora diz "o WinThor mudou desde o print" quando a referência ficou velha (a tela
+igual ao WinThor de agora).
+
+**A confirmar:** se a 1809 também soma o grupo do principal; se a 8073 deixa fora a filial 12 (um fornecedor com avaria
+só na 12 resolve).
 
 ## Na máquina
 

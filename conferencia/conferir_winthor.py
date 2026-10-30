@@ -156,10 +156,12 @@ def main():
             c, esperado = int(x["codfornec"]), Decimal(x[chave])
             dep = depois.get(c, Decimal(0)) if rotina == "1825" else Decimal(0)
             ok = abs(tela[campo].get(c, Decimal(0)) - dep - esperado) < Decimal("0.005")
+            # tela = WinThor de agora e diferente do print: o WinThor andou depois do print (referencia velha), nao erro
+            andou = not ok and abs(tela[campo].get(c, Decimal(0)) - wt[campo].get(c, Decimal(0))) < Decimal("0.005")
             print(f"Rotina {rotina} ({x.get('quando', '')}): fornecedor {c} = R$ {esperado:,.2f} | WinThor agora "
                   f"R$ {wt[campo].get(c, 0):,.2f} | tela R$ {tela[campo].get(c, 0):,.2f}"
                   + (f" (sem o lancado depois do print: R$ {tela[campo].get(c, 0) - dep:,.2f})" if dep else "")
-                  + f" | {'IGUAL' if ok else 'DIFERENTE'}")
+                  + f" | {'IGUAL' if ok else 'O WINTHOR MUDOU DESDE O PRINT (tela = WinThor de agora)' if andou else 'DIFERENTE'}")
     print("\nRESULTADO:", "DIFERENCAS acima (rodar de novo: se sumirem, era o WinThor andando entre as leituras)" if falhou else "tudo igual ao centavo")
     return 1 if falhou else 0
 

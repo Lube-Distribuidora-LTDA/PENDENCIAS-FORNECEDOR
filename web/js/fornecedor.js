@@ -362,7 +362,7 @@ function corpo1825(box, t) {
 function corpo8073(box, t) {
   var j = D.j, grupo = j.avaria_grupo || [], fora = j.avaria_fora || [];
   notasGrupo(box, grupo, "8073", "a avaria", function (g) { return g.va; }, function (p) { return p.av; });
-  // a 8073 com todas as filiais não soma a filial 11 (depósito fechado; pendencias.filial_fora_8073): mostra o que ficou fora
+  // a 8073 com todas as filiais não soma as filiais 7 e 11 (pendencias.filial_fora_8073): mostra o que ficou fora
   if (fora.length)
     box.appendChild(L.h("div", { class: "rotina-nota", html: L.ic("info") + "<span>Como na rotina 8073, " +
       fora.map(function (x) { return "a filial " + L.esc(x.fi) + " fica fora do valor (" + L.fInt(x.np) + (x.np === 1 ? " produto, " : " produtos, ") + "<b>" + L.esc(L.fBRL(x.va)) + "</b>)"; }).join("; ") +

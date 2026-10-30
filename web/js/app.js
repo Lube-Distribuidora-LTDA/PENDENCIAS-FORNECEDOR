@@ -123,6 +123,11 @@ function contaCel(v, r) {
   return c;
 }
 function periodoLista() { var h = (L.META || {}).hoje; return "01/01/2011 a " + (h ? L.fData(h) : "hoje"); }
+/* filiais que a 8073 não soma, como o relatório da rotina (pendencias.filial_fora_8073, vem no pacote) */
+function fora8073() {
+  var f = ((L.META || {}).totais || {}).fora_8073 || ["7", "11"];
+  return f.length === 1 ? "a filial " + f[0] : "as filiais " + f.slice(0, -1).join(", ") + " e " + f[f.length - 1];
+}
 /* soma da 1825 sem repetir: cada grupo do principal entra uma vez (os códigos do grupo mostram o mesmo saldo) */
 function somaGrupos(lin) {
   var vistos = new Set(), s = 0;
@@ -154,8 +159,8 @@ function renderizar() {
     "1809": L.fInt(t.f1809) + " fornecedores · " + L.fInt(t.nva) + " verbas com saldo",
     // a 1825 é por grupo do principal (migração 09): o número conta as contas correntes, não os códigos que mostram cada uma
     "1825": L.fInt(contas.size) + (contas.size === 1 ? " conta com saldo" : " contas com saldo") + " (grupo do principal) · todas as filiais · " + periodoLista(),
-    // a filial 11 fica fora como na rotina (pendencias.filial_fora_8073, migração 08): mudou lá, mudar aqui e na dica da coluna
-    "8073": L.fInt(t.f8073) + " fornecedores · " + L.fInt(t.npa) + " produtos avariados · como a rotina, sem a filial 11",
+    // as filiais que a rotina não soma vêm do banco (pendencias.filial_fora_8073, migrações 08 e 11)
+    "8073": L.fInt(t.f8073) + " fornecedores · " + L.fInt(t.npa) + " produtos avariados · como a rotina, sem " + fora8073(),
   };
   var kpis = L.kpis();
   ROTINAS.forEach(function (r) {
@@ -190,7 +195,7 @@ function renderizar() {
       dica: "Rotina 1825: débitos − créditos da conta corrente do grupo do principal do cadastro (todo código do grupo mostra o mesmo saldo, como na rotina), todas as filiais do cadastro, de 01/01/2011 até hoje",
       fmt: contaCel },
     { id: "av", titulo: "Valor avaria", tipo: "moeda", valor: function (r) { return r.av; }, exportarTipo: "moeda", barra: true, corBarra: "rgba(255,107,116,.16)",
-      dica: "Rotina 8073: quantidade avariada × valor da última entrada: a deste código + a dos fornecedores que têm ele como principal; todas as filiais menos a 11, como o relatório da rotina",
+      dica: "Rotina 8073: quantidade avariada × valor da última entrada: a deste código + a dos fornecedores que têm ele como principal; todas as filiais menos " + fora8073().replace(/^(a|as) /, "") + ", como o relatório da rotina",
       fmt: function (v, r) { return grupoCel(v, r.avo, "produtos"); } },
     { id: "fa", titulo: "Fantasia", tipo: "texto", valor: function (r) { return r.fa; }, essencial: false },
     { id: "cj", titulo: "CNPJ", tipo: "texto", valor: function (r) { return r.cj ? L.fCnpj(r.cj) : ""; }, essencial: false },
